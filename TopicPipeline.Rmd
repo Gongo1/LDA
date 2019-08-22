@@ -1,0 +1,114 @@
+---
+title: "Topic Modeling Pipeline"
+author: "Austin Gongora"
+date: "7/22/2019"
+output: html_document
+---
+
+```{r}
+library(tidyr)
+library(tidyselect)
+library(tidyverse)
+library(broom)
+library(dplyr)
+library(stringr)
+library(plyr)
+library(leaflet)
+library(ggplot2)
+library(ggpubr)
+library(topicmodels)
+library(tokenizers)
+library(stopwords)
+library(tm)
+library(SnowballC)
+library(tidytext)
+theme_set(theme_pubr())
+#setwd("OneDrive - Mars Inc/Desktop/TastyBite/")
+
+
+```
+
+#Load Data 
+```{r}
+#Read in data
+#Pro Tip: If you only change the file that needs to be read in and not the variable names then everything will work by just running it
+YT_Text <- read.delim("TB_YT.txt")
+```
+
+#Clean Data
+```{r}
+YT_Text$Contents <- YT_Text$i.m.on.to.the.estimate.to.be.reality.forester.you.we.have.to.lunch.of.cloissonnee.perishes.he.ll.be.a.all.six.of.them.each.one.is.fantastic.some.have.baionette.sonnets.somehow.for.a.peace.and.amabilis.is.really.a.ready.fund.may.to.get.editor.pointed.to.it.with.a.lot.spices.of.it
+
+```
+
+#Text Pre-Processing
+```{r}
+#Tokenize Blog Contents
+blog_contents <-YT_Text %>%
+  select(Contents)
+
+#Preproccessing Txt Data
+
+contents<- Corpus(VectorSource(blog_contents$Contents))
+# convert to lower case
+contents <- tm_map(contents, content_transformer(tolower))
+#remove ������ what would be emojis
+mydata<-tm_map(contents, content_transformer(gsub), pattern="\\W",replace=" ")
+# remove anything other than English letters or space
+removeNumPunct <- function(x) gsub("[^[:alpha:][:space:]]*", "", x)
+mydata <- tm_map(mydata, content_transformer(removeNumPunct))
+#Remove Common English Stop Words
+mydata <-tm_map(mydata, removeWords, stopwords("english"))
+
+#Remove User-Defined Words
+#Add any additional Stop words that need to be added 
+mydata <-tm_map(mydata, removeWords, c("like","one", "can","just","now","know","get","right","take","come","see","good","tasti","tasty","bite","day","let","will","got","much","want","also","don","lot","well","realli","thing","realli","littl","little","yet","yes","tast","man","use","actual","look","kind","think","really","reall","come","someth","something","back","said","thousand","say", "put", "two", "three", "time", "hundred", "thousand", "first", "tri","another","anoth", "bit" ,"five","make","even","try","tr","twenti","twenty","nine","may","say","second","actual"))
+
+# remove extra whitespace
+mydata <- tm_map(mydata, stripWhitespace)
+# Remove numbers
+mydata <- tm_map(mydata, removeNumbers)
+# Remove punctuations
+mydata <- tm_map(mydata, removePunctuation)
+
+#Stemming- using one word for similar words
+mydata <- tm_map(mydata, stemDocument)
+
+#create a term matrix and store it as dtm
+dtm <- DocumentTermMatrix(mydata)
+
+rowTotals <- apply(dtm , 1, sum) #Find the sum of words in each Document
+dtm.new   <- dtm[rowTotals> 0, ]           #remove all docs without words
+
+```
+
+
+#Topic Modeling
+```{r, echo=FALSE}
+#K controls the amount of topics
+# K specifies the number of topics to split for LDA approach
+ap_lda <- LDA(dtm.new, k = 15, control = list(seed = 1234))
+
+
+ap_topics <- tidy(ap_lda, matrix = "beta")
+ap_topics
+
+dtm_words <-dtm.new$dimnames$Terms
+
+ap_top_terms <- ap_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+ap_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+
+
+
